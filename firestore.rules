@@ -1,0 +1,31 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // REGLA PARA USUARIOS:
+    // Permite a los usuarios leer y escribir en su propio documento.
+    // Los administradores pueden leer los datos de cualquier usuario.
+    match /users/{userId} {
+      allow read: if request.auth != null && (request.auth.uid == userId || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true);
+      
+      // PERMISO CLAVE: Un usuario autenticado puede actualizar su propio documento.
+      allow update: if request.auth != null && request.auth.uid == userId;
+      
+      // Permite la creación de un usuario si el UID del documento coincide con el del usuario autenticado.
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
+      
+      // No se permite borrar usuarios desde el cliente por seguridad.
+      allow delete: if false;
+    }
+
+    // REGLA PARA COMERCIOS VERDES:
+    // Cualquiera puede leer, pero solo los administradores pueden crear, actualizar o borrar.
+    match /comercios_verdes/{comercioId} {
+      allow read: if true;
+      allow write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    // Puedes añadir más reglas para otras colecciones aquí...
+  }
+}

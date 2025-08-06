@@ -1,0 +1,12 @@
+specVersion: "v1"
+serviceId: "gea"
+location: "southamerica-west1"
+schema:
+  source: "./schema"
+  datasource:
+    postgresql:
+      database: "gea-test-db"
+      cloudSql:
+        instanceId: "gea-test"
+      # schemaValidation: "COMPATIBLE"
+connectorDirs: ["./connector"]

@@ -1,0 +1,56 @@
+type User @table {
+  displayName: String!
+  createdAt: Timestamp!
+  email: String
+  photoUrl: String
+  location: String
+}
+
+type ImpactCategory @table {
+  name: String!
+  unit: String!
+  description: String
+  defaultFactor: Float
+}
+
+type ImpactEntry @table {
+  user: User!
+  impactCategory: ImpactCategory!
+  value: Float!
+  entryDate: Date!
+  createdAt: Timestamp!
+  notes: String
+  calculatedCO2e: Float
+}
+
+type SustainabilityGoal @table {
+  user: User!
+  impactCategory: ImpactCategory
+  name: String!
+  targetValue: Float!
+  startDate: Date!
+  endDate: Date!
+  createdAt: Timestamp!
+  description: String
+  status: String
+  currentProgress: Float
+}
+
+type ResourceTip @table {
+  title: String!
+  content: String!
+  createdAt: Timestamp!
+  type: String
+  imageUrl: String
+  externalLink: String
+  category: String
+}
+
+type CommunityPost @table {
+  user: User!
+  title: String!
+  content: String!
+  createdAt: Timestamp!
+  updatedAt: Timestamp
+  topic: String
+}
