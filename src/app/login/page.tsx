@@ -1,40 +1,24 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { getUserByEmail } from '@/lib/users-crud-complete';
-import { Loader2 } from 'lucide-react';
-import { useAuth, CustomUser } from '@/context/AuthContext';
+import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
+import { app } from '@/lib/firebase-client';
+import { Loader2, Mail, Lock } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 export default function LoginPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const { toast } = useToast();
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [success, setSuccess] = useState('');
-  const { login } = useAuth();
-
-  useEffect(() => {
-    if (searchParams.get('success')) {
-      setSuccess('Usuario creado exitosamente. Ahora puedes iniciar sesión.');
-      const timer = setTimeout(() => setSuccess(''), 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [searchParams]);
+  const auth = getAuth(app);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,120 +26,94 @@ export default function LoginPage() {
     setIsSubmitting(true);
     
     try {
-      const userFromDB = await getUserByEmail(form.email) as CustomUser | null;
-
-      if (!userFromDB) {
-        setError('Usuario no encontrado.');
-        setIsSubmitting(false);
-        return;
-      }
-      
-      // @ts-ignore
-      if (userFromDB.password !== form.password) {
-        setError('Contraseña incorrecta.');
-        setIsSubmitting(false);
-        return;
-      }
-      
-      const userToLogin: CustomUser = {
-        uid: userFromDB.uid,
-        displayName: userFromDB.displayName || "Usuario",
-        photoUrl: userFromDB.photoUrl || null,
-        email: form.email,
-        isAdmin: userFromDB.isAdmin || false,
-      };
-
-      console.log("Objeto de usuario que se enviará al contexto:", userToLogin);
-      
-      setError(''); 
-      login(userToLogin);
+      await signInWithEmailAndPassword(auth, form.email, form.password);
+      toast({
+        title: "¡Bienvenido de nuevo!",
+        description: "Has iniciado sesión correctamente.",
+      });
       router.push('/dashboard');
-
-    } catch (err: any) { // ✅ CORRECCIÓN: Se añadieron las llaves {}
-      console.error("Error en login manual:", err);
-      setError(`Error: ${err.message}`);
+    } catch (err: any) {
+      console.error("Error de autenticación:", err);
+      setError("Credenciales inválidas. Por favor, intente de nuevo.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/50 p-4 flex-col gap-6">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">
-          <div className="mb-4 flex justify-center">
-            <Link href="/" className="flex items-center gap-2">
-              <Image 
-                src="/logoBig.png" 
-                alt="GEA BBVA Logo" 
-                width={50} 
-                height={50}
-                className="mr-2"
-              />
-              <span className="text-2xl font-bold tracking-tighter font-headline">
-                <span className="text-primary">GEA</span> <span className="text-secondary">BBVA</span>
-              </span>
-            </Link>
+    <div className="relative min-h-screen w-full">
+      <div className="absolute inset-0 z-[-10]">
+        <Image
+          src="/login-background.jpg"
+          alt="Fondo futurista con edificios ecológicos y paneles solares"
+          fill
+          className="object-cover"
+        />
+        <div className="absolute inset-0 bg-black/50"></div>
+      </div>
+
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="w-full max-w-md space-y-8">
+          <div className="text-center text-white">
+            <h1 className="text-4xl lg:text-5xl font-bold tracking-tighter font-headline">
+              <Link href="/" className="flex items-center">
+              {/*<span className="text-emerald-400">GEA</span> <span className="text-blue-400">BBVA</span>*/}
+              </Link>              
+            </h1>
           </div>
-          <CardTitle>Bienvenido</CardTitle>
-          <CardDescription>
-            Ingresa tus credenciales para acceder a tu cuenta.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="m@example.com"
-                required
-                value={form.email}
-                onChange={e => setForm({ ...form, email: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center">
-                <Label htmlFor="password">Contraseña</Label>
+          <div className="bg-black/30 backdrop-blur-sm border border-white/20 rounded-2xl p-8 shadow-2xl">
+            <div className="space-y-6">
+              <form onSubmit={handleLogin} className="space-y-6">
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="Email"
+                    required
+                    value={form.email}
+                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    className="pl-10 bg-white/10 text-white border-white/20 focus:ring-emerald-400 placeholder:text-gray-400"
+                  />
+                </div>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <Input 
+                    id="password" 
+                    type="password" 
+                    placeholder="Contraseña"
+                    required 
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                    className="pl-10 bg-white/10 text-white border-white/20 focus:ring-emerald-400 placeholder:text-gray-400"
+                  />
+                </div>
+                {error && <p className="text-red-400 text-sm text-center">{error}</p>}
+                <Button 
+                  type="submit" 
+                  className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-lg rounded-full transition-all duration-300 shadow-lg hover:shadow-emerald-500/50" 
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Login
+                </Button>
+              </form>
+              <div className="text-center text-sm text-gray-300">
                 <Link
-                  href="#"
-                  className="ml-auto inline-block text-sm underline"
+                  href="/forgot-password"
+                  className="underline hover:text-emerald-400"
                 >
                   ¿Olvidaste tu contraseña?
                 </Link>
+                <span className="mx-2">|</span>
+                <Link href="/signup" className="underline hover:text-emerald-400">
+                  Regístrate
+                </Link>
               </div>
-              <Input
-                id="password"
-                type="password"
-                required
-                value={form.password}
-                onChange={e => setForm({ ...form, password: e.target.value })}
-              />
             </div>
-            {success && <div className="text-green-500 text-sm">{success}</div>}
-            {error && <div className="text-red-500 text-sm" style={{ whiteSpace: 'pre-wrap' }}>{error}</div>}
-            <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Iniciar Sesión
-            </Button>
-            <Button variant="outline" className="w-full" type="button" disabled>
-              Iniciar Sesión con Google (deshabilitado)
-            </Button>
-            <Button variant="outline" className="w-full" type="button" disabled>
-              Iniciar Sesión con Apple (deshabilitado)
-            </Button>
-          </form>
-        </CardContent>
-        <CardFooter className="flex-col">
-          <p className="text-sm text-center text-muted-foreground">
-            ¿No tienes una cuenta?{' '}
-            <Link href="/signup" className="underline text-primary">
-              Regístrate
-            </Link>
-          </p>
-        </CardFooter>
-      </Card>
+          </div>
+        </div>
+      </div>
     </div>
-  );
+  )
 }

@@ -8,7 +8,7 @@ export interface ComercioVerde {
   description: string;
   imageUrl: string;
   tags: string[];
-  category: string; // Added this line
+  rubro: string; // Cambiado de category a rubro
   location: GeoPoint;
   isSustainable?: boolean;
   cuit?: string; // ✅ Se añade el campo CUIT (opcional)
@@ -22,7 +22,7 @@ export interface ComercioVerdeMap {
   description: string;
   imageUrl: string;
   tags: string[];
-  category: string; // Added this line
+  rubro: string; // Cambiado de category a rubro
     ubicacion: { // Lo transformamos a un objeto {lat, lng}
     lat: number;
     lng: number;

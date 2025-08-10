@@ -107,7 +107,7 @@ export default function CatalogPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>¿Confirmar Canje?</AlertDialogTitle>
             <AlertDialogDescription>
-              Estás a punto de canjear "{productToRedeem?.name}" por {productToRedeem?.coinsRequired} Monedas Verdes.
+              Estás a punto de canjear &quot;{productToRedeem?.name}&quot; por {productToRedeem?.coinsRequired} Monedas Verdes.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

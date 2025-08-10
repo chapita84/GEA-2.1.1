@@ -25,7 +25,7 @@ type ProductCardProps = {
   description?: string;
   imageUrl?: string;
   imageHint?: string;
-  category: string;
+  rubro: string; // Cambiado de category a rubro
   coinsRequired: number;
   stock?: number;
   ecologicalImpact?: string;
@@ -39,7 +39,7 @@ export function ProductCard({
   description,
   imageUrl,
   imageHint,
-  category,
+  rubro, // Cambiado de category a rubro
   coinsRequired,
   stock,
   ecologicalImpact,
@@ -87,7 +87,7 @@ export function ProductCard({
       </CardHeader>
       <CardContent className="flex-1 p-4">
         <Badge variant="secondary" className="mb-2">
-          {category}
+          {rubro}
         </Badge>
         <h3 className="text-lg font-semibold font-headline">{name}</h3>
         {description && (

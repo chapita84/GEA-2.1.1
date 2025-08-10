@@ -38,6 +38,11 @@ import { useAuth, CustomUser } from '@/context/AuthContext';
 import { gamificationLevels, calculateLevel } from '@/lib/gamification';
 import Link from 'next/link';
 import { updateClient } from '@/lib/client-crud';
+import { getAuth, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
+import { app } from '@/lib/firebase-client';
+import { User } from '@/models/user_model';
+import { Client } from '@/models/client_model';
+
 
 // Datos estáticos mantenidos para las insignias y historial
 const badges = [
@@ -64,7 +69,7 @@ export default function ProfilePage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [formData, setFormData] = useState<Partial<CustomUser>>({});
 
-    useEffect(() => {
+  useEffect(() => {
     if (user) {
       setFormData({
         displayName: user.displayName || '',
@@ -104,13 +109,12 @@ export default function ProfilePage() {
             newPhotoUrl = await uploadProfileImage({ userId: user.uid, file: selectedFile });
           }
 
-          // ✅ CORRECCIÓN: Se asegura que los valores 'null' se conviertan a 'undefined'
-          const userDataToUpdate = {
+          const userDataToUpdate: Partial<User> = {
             displayName: formData.displayName ?? undefined,
             photoUrl: newPhotoUrl ?? undefined,
           };
           
-          const clientDataToUpdate: Partial<CustomUser> = {
+          const clientDataToUpdate: Partial<Client> = {
             nombre: formData.nombre,
             apellido: formData.apellido,
             telefono: formData.telefono,
@@ -146,11 +150,6 @@ export default function ProfilePage() {
 
   const handlePasswordChange = async () => {
     if (!user) return;
-    // @ts-ignore
-    if (user.password !== passwordData.current) {
-      toast({ title: "Contraseña actual incorrecta", variant: "destructive" });
-      return;
-    }
     if (passwordData.new.length < 6) {
       toast({ title: "Contraseña nueva muy corta", description: "Debe tener al menos 6 caracteres.", variant: "destructive" });
       return;
@@ -161,16 +160,25 @@ export default function ProfilePage() {
     }
 
     try {
-      await updateUserPassword(user.uid, passwordData.new);
-      
-      updateUser({ password: passwordData.new });
-      
+      const auth = getAuth(app);
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error("No hay usuario autenticado.");
+
+      const credential = EmailAuthProvider.credential(user.email!, passwordData.current);
+      await reauthenticateWithCredential(currentUser, credential);
+
+      await updatePassword(currentUser, passwordData.new);
+
       toast({ title: "Contraseña actualizada", description: "Tu contraseña ha sido cambiada con éxito." });
       setIsPasswordModalOpen(false);
       setPasswordData({ current: '', new: '', confirm: '' });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error al cambiar la contraseña:", error);
-      toast({ title: "Error al cambiar contraseña", variant: "destructive" });
+      if (error.code === 'auth/wrong-password') {
+        toast({ title: "Error", description: "La contraseña actual es incorrecta.", variant: "destructive" });
+      } else {
+        toast({ title: "Error", description: "No se pudo cambiar la contraseña.", variant: "destructive" });
+      }
     }
   };
 
@@ -248,7 +256,8 @@ export default function ProfilePage() {
               />
             ) : null}
             <AvatarFallback className="text-lg font-semibold bg-primary/10 text-primary">
-              {getInitials(user.displayName)}
+              {/* ✅ CORRECCIÓN: Se asegura que el valor sea 'null' si es 'undefined' */}
+              {getInitials(user.displayName || null)}
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 text-center sm:text-left">

@@ -232,6 +232,12 @@ Reglas de interacción:
 - Celebra los pequeños logros y refuerza positivamente las decisiones del
   usuario.
 - Si no sabes algo con certeza, admítelo y busca la mejor respuesta.
+- **IMPORTANTE: Formatea tus respuestas usando Markdown.**
+- Para mostrar tablas, usa la sintaxis de Markdown.
+- Para resaltar texto, usa **negrita** o *cursiva*.
+- Para incluir un ícono, usa la sintaxis especial 
+::icon[NombreDelIcono]:: donde NombreDelIcono es un nombre de la librería 
+Lucide Icons (ej: ::icon[Leaf]::, ::icon[Recycle]::, ::icon[Award]::).
 `;
 
 export const askGeminiAboutMyData = onCall(
@@ -480,8 +486,6 @@ export const redeemProduct = onCall(
     const redemptionRef = db.collection("redemptions").doc();
 
     try {
-      // Se ejecuta como una transacción para asegurar
-      // la integridad de los datos
       await db.runTransaction(async (transaction) => {
         const userDoc = await transaction.get(userRef);
         const productDoc = await transaction.get(productRef);
@@ -496,30 +500,25 @@ export const redeemProduct = onCall(
         const userData = userDoc.data()!;
         const productData = productDoc.data()!;
 
-        // 1. Verificar si el usuario tiene suficientes monedas
         const userCoins = userData.greenCoins || 0;
         if (userCoins < productData.coinsRequired) {
           throw new HttpsError("failed-precondition", "Monedas insuficientes.");
         }
 
-        // 2. Verificar si hay stock del producto
         const productStock = productData.stock || 0;
         if (productStock <= 0) {
           throw new HttpsError("failed-precondition", "Producto sin stock.");
         }
 
-        // 3. Actualizar el saldo de monedas del usuario
         transaction.update(userRef, {
           greenCoins:
-           admin.firestore.FieldValue.increment(-productData.coinsRequired),
+             admin.firestore.FieldValue.increment(-productData.coinsRequired),
         });
 
-        // 4. Actualizar el stock del producto
         transaction.update(productRef, {
           stock: admin.firestore.FieldValue.increment(-1),
         });
 
-        // 5. Crear el registro en el historial de canjes
         transaction.set(redemptionRef, {
           userId: userId,
           productId: productId,
@@ -529,13 +528,128 @@ export const redeemProduct = onCall(
         });
       });
 
-      logger.info(`Usuario ${userId} canjeó el producto ${productId} 
-        exitosamente.`);
+      logger.info(`Usuario ${userId} 
+        canjeó el producto ${productId} exitosamente.`);
       return {success: true, message: "¡Canje exitoso!"};
     } catch (error) {
       logger.error(`Error en el canje para el usuario ${userId}:`, error);
-      // Re-lanza el error para que el frontend lo reciba
       throw error;
     }
   }
+);
+
+/**
+ * Activa o desactiva un usuario en Firebase Authentication y Firestore.
+ * Debe ser llamada por un usuario administrador.
+ */
+export const toggleUserStatus = onCall(
+  {region: "southamerica-west1"},
+  async (request) => {
+    const adminUid = request.auth?.uid;
+    if (!adminUid) {
+      throw new HttpsError(
+        "unauthenticated",
+        "La función debe ser llamada por un usuario autenticado.",
+      );
+    }
+    const adminUserDoc = await db.collection("users").doc(adminUid).get();
+    if (!adminUserDoc.data()?.isAdmin) {
+      throw new HttpsError(
+        "permission-denied",
+        "Esta función solo puede ser llamada por un administrador.",
+      );
+    }
+
+    const {userId, newStatus} = request.data;
+    if (!userId || !newStatus || !["active", "inactive"].includes(newStatus)) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Faltan los parámetros 'userId' y 'newStatus' ('active' o 'inactive').",
+      );
+    }
+
+    try {
+      const isDisabled = newStatus === "inactive";
+      await admin.auth().updateUser(userId, {disabled: isDisabled});
+
+      const userRef = db.collection("users").doc(userId);
+      await userRef.update({status: newStatus});
+
+      logger.info(`Estado del usuario ${userId} actualizado a ${newStatus}.`);
+      return {success: true, message: "Estado del usuario actualizado."};
+    } catch (error) {
+      logger.error(`Error al cambiar el estado para el usuario ${userId}:`,
+        error);
+      throw new HttpsError(
+        "internal",
+        "No se pudo actualizar el estado del usuario.",
+      );
+    }
+  },
+);
+
+export const createUserByAdmin = onCall(
+  {region: "southamerica-west1"},
+  async (request) => {
+    const adminUid = request.auth?.uid;
+    if (!adminUid) {
+      throw new HttpsError("unauthenticated", "No autenticado.");
+    }
+    const adminUserDoc = await db.collection("users").doc(adminUid).get();
+    if (!adminUserDoc.data()?.isAdmin) {
+      throw new HttpsError("permission-denied", "No es administrador.");
+    }
+
+    const {userData, clientData} = request.data;
+    if (!userData?.email || !userData?.password || !clientData?.nombre) {
+      throw new HttpsError("invalid-argument", "Faltan datos requeridos.");
+    }
+
+    try {
+      // Validar y limpiar photoURL
+      let validPhotoURL = "https://via.placeholder.com/150";
+      if (userData.photoUrl &&
+          typeof userData.photoUrl === "string" &&
+          userData.photoUrl.trim() !== "" &&
+          (userData.photoUrl.startsWith("http://") || userData.photoUrl.startsWith("https://"))) {
+        validPhotoURL = userData.photoUrl.trim();
+      }
+
+      // 1. Crear usuario en Firebase Authentication
+      const userRecord = await admin.auth().createUser({
+        email: userData.email,
+        password: userData.password,
+        displayName: userData.displayName,
+        photoURL: validPhotoURL,
+      });
+
+      // 2. Crear documento en la colección 'users'
+      const userDocData = {
+        uid: userRecord.uid,
+        email: userData.email,
+        displayName: userData.displayName,
+        photoUrl: userRecord.photoURL,
+        createdAt: new Date().toISOString(),
+        isAdmin: userData.isAdmin || false,
+        status: "active",
+        greenCoins: 0,
+        gamification: {level: 1, points: 0, title: "Explorador Ecológico"},
+      };
+      await db.collection("users").doc(userRecord.uid).set(userDocData);
+
+      // 3. Crear documento en la colección 'clients'
+      const finalClientData = {
+        ...clientData,
+        id: userRecord.uid,
+        usuarioUid: userRecord.uid,
+      };
+      await db.collection("clients").doc(userRecord.uid).set(finalClientData);
+
+      logger.info(`Usuario ${userRecord.uid} creado por admin ${adminUid}`);
+      return {success: true, uid: userRecord.uid};
+    } catch (error) {
+      logger.error("Error al crear usuario por admin:", error);
+      throw new HttpsError("internal", "No se pudo crear el usuario.");
+    }
+  },
 );

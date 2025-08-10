@@ -14,6 +14,7 @@ export interface User {
   displayName?: string;
   photoUrl?: string;
   isAdmin?: boolean;
+  status?: 'active' | 'inactive';
   password?: string;
   createdAt?: string;
   interests?: string[];

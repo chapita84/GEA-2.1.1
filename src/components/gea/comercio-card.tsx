@@ -34,7 +34,7 @@ export function ComercioCard({ comercio }: ComercioCardProps) {
         </div>
       </CardHeader>
       <CardContent className="p-4 flex-grow">
-        <Badge variant="secondary" className="mb-2">{comercio.category}</Badge>
+        <Badge variant="secondary" className="mb-2">{comercio.rubro}</Badge> {/* Cambiado de category a rubro */}
         <CardTitle className="text-xl font-bold">{comercio.name}</CardTitle>
         <CardDescription className="mt-2 text-sm">{comercio.description}</CardDescription>
       </CardContent>

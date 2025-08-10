@@ -1,168 +1,153 @@
 'use client';
 
 import { useState } from 'react';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { createUser, getUserByEmail } from '@/lib/users-crud-complete';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardFooter,
-  CardDescription,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
+import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
+import { app } from '@/lib/firebase-client';
+import { createUser } from '@/lib/users-crud-complete';
+import { createClient } from '@/lib/client-crud';
+import { Loader2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { User } from '@/models/user_model';
+import { Client } from '@/models/client_model';
 
 export default function SignupPage() {
+  const router = useRouter();
+  const { toast } = useToast();
   const [form, setForm] = useState({
+    displayName: '',
     email: '',
     password: '',
-    displayName: '',
-    photoUrl: '',
-    interests: '',
-    onboardingCompleted: false,
-    greenCoins: 0,
-    isAdmin: false,
-    gamification: '',
+    confirmPassword: '',
   });
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const router = useRouter();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const auth = getAuth(app);
 
-  const handleSignup = async () => {
-    setLoading(true);
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
     setError('');
+    
+    if (form.password !== form.confirmPassword) {
+      setError("Las contraseñas no coinciden.");
+      return;
+    }
+    if (form.password.length < 6) {
+      setError("La contraseña debe tener al menos 6 caracteres.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    
     try {
-      // Validar si el usuario ya existe en Firestore
-      const existingUser = await getUserByEmail(form.email);
-      if (existingUser) {
-        setError('El usuario ya existe con ese email.');
-        setLoading(false);
-        return;
-      }
+      // 1. Crear el usuario en Firebase Authentication
+      const userCredential = await createUserWithEmailAndPassword(auth, form.email, form.password);
+      const firebaseUser = userCredential.user;
 
-      // Genera un UID simple (puedes usar email como ID o una función hash)
-      const uid = form.email.replace(/[^a-zA-Z0-9]/g, '');
-
-      // Persiste el usuario en Firestore
-      await createUser({
-        uid,
-        email: form.email,
-        password: form.password, // Guardar contraseñas en texto plano NO es seguro, solo para pruebas
+      // 2. Preparar los datos para Firestore
+      const userData: User = {
+        uid: firebaseUser.uid,
+        email: firebaseUser.email!,
         displayName: form.displayName,
-        photoUrl: form.photoUrl || 'https://via.placeholder.com/150',
         createdAt: new Date().toISOString(),
-        interests: form.interests ? form.interests.split(',').map(i => i.trim()) : [],
-        onboardingCompleted: form.onboardingCompleted,
-        greenCoins: Number(form.greenCoins) || 0,
-        isAdmin: form.isAdmin,
-        gamification: form.gamification ? JSON.parse(form.gamification) : { level: 1, points: 0 }
+        isAdmin: false, // Por defecto, los nuevos usuarios no son administradores
+        greenCoins: 0,
+        gamification: { level: 1, points: 0, title: 'Explorador Ecológico' }
+      };
+
+      const clientData: Client = {
+        id: firebaseUser.uid,
+        usuarioUid: firebaseUser.uid,
+        nombre: form.displayName,
+        apellido: '', // El usuario podrá completar esto en su perfil
+        telefono: '',
+        direccion: '',
+        fechaNacimiento: '',
+        documento: '',
+      };
+
+      // 3. Crear los documentos en las colecciones 'users' y 'clients'
+      await createUser(firebaseUser, { displayName: form.displayName });
+      await createClient(clientData);
+
+      toast({
+        title: "¡Cuenta Creada!",
+        description: "Tu cuenta ha sido creada exitosamente. Ahora puedes iniciar sesión.",
       });
 
-      router.push('/login?success=1');
-    } catch (error: any) {
-      setError('Error al crear el usuario: ' + error.message);
+      router.push('/login');
+
+    } catch (err: any) {
+      console.error("Error de registro:", err);
+      if (err.code === 'auth/email-already-in-use') {
+        setError("Este correo electrónico ya está en uso.");
+      } else {
+        setError("Ocurrió un error al crear la cuenta. Por favor, intente de nuevo.");
+      }
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/50 p-4 flex-col gap-6">
+    <div className="flex min-h-screen items-center justify-center bg-muted/50 p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <CardTitle>Crear Cuenta</CardTitle>
+          <div className="mb-4 flex justify-center">
+            <Link href="/" className="flex items-center gap-2">
+              <Image 
+                src="/logoBig.png" 
+                alt="GEA BBVA Logo" 
+                width={50} 
+                height={50}
+                className="mr-2"
+              />
+              <span className="text-2xl font-bold tracking-tighter font-headline">
+                <span className="text-primary">GEA</span> <span className="text-secondary">BBVA</span>
+              </span>
+            </Link>
+          </div>
+          <CardTitle>Crear una Cuenta</CardTitle>
           <CardDescription>
-            Ingresa tus datos para registrarte en GEA BBVA.
+            Ingresa tus datos para registrarte en GEA.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form className="space-y-4" onSubmit={e => { e.preventDefault(); handleSignup(); }}>
+          <form onSubmit={handleSignup} className="space-y-4">
             <div className="space-y-2">
-              <Input
-                placeholder="Nombre"
-                value={form.displayName}
-                onChange={e => setForm({ ...form, displayName: e.target.value })}
-              />
+              <Label htmlFor="displayName">Nombre a Mostrar</Label>
+              <Input id="displayName" required value={form.displayName} onChange={e => setForm({ ...form, displayName: e.target.value })}/>
             </div>
             <div className="space-y-2">
-              <Input
-                placeholder="Email"
-                type="email"
-                value={form.email}
-                onChange={e => setForm({ ...form, email: e.target.value })}
-              />
+              <Label htmlFor="email">Email</Label>
+              <Input id="email" type="email" required value={form.email} onChange={e => setForm({ ...form, email: e.target.value })}/>
             </div>
             <div className="space-y-2">
-              <Input
-                placeholder="Contraseña"
-                type="password"
-                value={form.password}
-                onChange={e => setForm({ ...form, password: e.target.value })}
-              />
+              <Label htmlFor="password">Contraseña</Label>
+              <Input id="password" type="password" required value={form.password} onChange={e => setForm({ ...form, password: e.target.value })}/>
             </div>
             <div className="space-y-2">
-              <Input
-                placeholder="URL de Foto (opcional)"
-                value={form.photoUrl}
-                onChange={e => setForm({ ...form, photoUrl: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Input
-                placeholder="Intereses (separados por coma)"
-                value={form.interests}
-                onChange={e => setForm({ ...form, interests: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={form.onboardingCompleted}
-                  onChange={e => setForm({ ...form, onboardingCompleted: e.target.checked })}
-                />
-                Onboarding Completado
-              </label>
-            </div>
-            <div className="space-y-2">
-              <Input
-                placeholder="GreenCoins"
-                type="number"
-                value={form.greenCoins}
-                onChange={e => setForm({ ...form, greenCoins: Number(e.target.value) })}
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={form.isAdmin}
-                  onChange={e => setForm({ ...form, isAdmin: e.target.checked })}
-                />
-                Es Administrador
-              </label>
-            </div>
-            <div className="space-y-2">
-              <Input
-                placeholder='Gamificación (ej: {"level":1,"points":0})'
-                value={form.gamification}
-                onChange={e => setForm({ ...form, gamification: e.target.value })}
-              />
+              <Label htmlFor="confirmPassword">Confirmar Contraseña</Label>
+              <Input id="confirmPassword" type="password" required value={form.confirmPassword} onChange={e => setForm({ ...form, confirmPassword: e.target.value })}/>
             </div>
             {error && <div className="text-red-500 text-sm">{error}</div>}
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Registrando...' : 'Registrarse'}
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Registrarse
             </Button>
           </form>
         </CardContent>
-        <CardFooter className="flex-col">
-          <p className="text-sm text-center text-muted-foreground">
+        <CardFooter>
+          <p className="text-sm text-center text-muted-foreground w-full">
             ¿Ya tienes una cuenta?{' '}
             <Link href="/login" className="underline text-primary">
-              Iniciar Sesión
+              Inicia Sesión
             </Link>
           </p>
         </CardFooter>

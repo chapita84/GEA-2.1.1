@@ -11,11 +11,10 @@ import {
 } from 'firebase/firestore';
 import { app } from './firebase-client';
 import { User } from '@/models/user_model';
+import { User as FirebaseAuthUser } from 'firebase/auth';
 
 const db = getFirestore(app);
 const usersCollection = collection(db, 'users');
-
-// ... (tus funciones getAllUsers, getUserByEmail, createUser, etc. se mantienen igual) ...
 
 export async function getAllUsers(): Promise<User[]> {
   const snapshot = await getDocs(usersCollection);
@@ -40,31 +39,51 @@ export async function getUserByEmail(email: string): Promise<User | null> {
   }
 }
 
-export async function createUser(user: User) {
-  const userRef = doc(usersCollection, user.uid);
-  const { uid, ...userData } = user;
+export async function createUser(firebaseUser: FirebaseAuthUser, extraData: Partial<User>): Promise<void> {
+  const userRef = doc(usersCollection, firebaseUser.uid);
+  
+  // ✅ CORRECCIÓN: Se asegura que los valores 'null' se conviertan a 'undefined'
+  const displayName = extraData.displayName ?? firebaseUser.displayName ?? firebaseUser.email;
+  const photoUrl = extraData.photoUrl ?? firebaseUser.photoURL ?? 'https://via.placeholder.com/150';
+
+  const userData: User = {
+    uid: firebaseUser.uid,
+    email: firebaseUser.email!,
+    displayName: displayName || undefined,
+    photoUrl: photoUrl || undefined,
+    createdAt: new Date().toISOString(),
+    isAdmin: extraData.isAdmin || false,
+    greenCoins: 0,
+    gamification: { level: 1, points: 0, title: 'Explorador Ecológico' },
+  };
+
   await setDoc(userRef, userData);
 }
 
-export async function updateUser(uid: string, data: Partial<User>) {
+export async function updateUser(uid: string, data: Partial<User>): Promise<void> {
   const userRef = doc(usersCollection, uid);
-  await updateDoc(userRef, data);
+  const { password, ...updateData } = data;
+  await updateDoc(userRef, updateData);
 }
 
-// ✅ NUEVA FUNCIÓN: Actualiza únicamente la contraseña de un usuario.
 export async function updateUserPassword(uid: string, newPassword: string): Promise<void> {
-  try {
-    const userRef = doc(usersCollection, uid);
-    await updateDoc(userRef, { password: newPassword });
-  } catch (error) {
-    console.error("Error al actualizar la contraseña: ", error);
-    throw error;
-  }
+  const userRef = doc(usersCollection, uid);
+  await updateDoc(userRef, { password: newPassword });
 }
+/**
+ * Actualiza la contraseña de un usuario en Firebase Auth.
+ * Esta es una operación sensible y requeriría que el admin tenga privilegios elevados.
+ * La forma más segura de hacerlo es a través de una Cloud Function.
+ * Por ahora, esta función no se usará, ya que el cambio de contraseña se hará de otra forma.
+ */
+// export async function updateUserPassword(uid: string, newPassword: string) { ... }
 
-export async function deleteUser(uid: string) {
+
+export async function deleteUser(uid: string): Promise<void> {
   const userRef = doc(usersCollection, uid);
   await deleteDoc(userRef);
+  // Nota: Esto no elimina al usuario de Firebase Auth.
+  // Eso también debería hacerse a través de una Cloud Function.
 }
 
 export const uploadProfileImage = async ({ userId, file }: { userId: string; file: File }): Promise<string> => {

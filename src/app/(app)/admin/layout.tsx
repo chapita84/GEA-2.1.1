@@ -5,11 +5,12 @@ import { usePathname } from 'next/navigation';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const adminNavItems = [
-  { name: 'Dashboard', href: '/admin' },
+  { name: 'Admin Gral', href: '/admin' },
+  { name: 'Dashboard', href: '/admin/dashboard' },
   { name: 'Usuarios', href: '/admin/users' },
   { name: 'Comercios Verdes', href: '/admin/comercios-verdes' },
-  { name: 'Productos', href: '/admin/products' },
   { name: 'Transacciones', href: '/admin/record1' },
+  { name: 'Beneficios', href: '/admin/products' },
   { name: 'Clientes', href: '/admin/clients' },
   { name: 'Gamificación', href: '/admin/gamification' },
 ];

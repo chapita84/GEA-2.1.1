@@ -26,3 +26,12 @@ export async function getUserRedemptions(userId: string): Promise<Redemption[]> 
   const snapshot = await getDocs(q);
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Redemption));
 }
+
+/**
+ * Obtiene todos los canjes de la base de datos.
+ * @returns Un array con todos los canjes.
+ */
+export async function getAllRedemptions(): Promise<Redemption[]> {
+  const snapshot = await getDocs(redemptionsCollection);
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Redemption));
+}

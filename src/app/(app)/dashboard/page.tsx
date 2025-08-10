@@ -32,10 +32,11 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
-// ✅ Se importan los hooks y la lógica necesaria
+// Se importan los hooks y la lógica necesaria
 import { useAuth } from '@/context/AuthContext';
 import { gamificationLevels } from '@/lib/gamification';
 import { ElementType } from 'react';
+import * as LucideIcons from 'lucide-react';
 
 const dashboardLinks = [
   {
@@ -107,13 +108,13 @@ const recentActivities = [
 ];
 
 export default function DashboardPage() {
-  // ✅ Se obtienen los datos del usuario y el estado de carga del contexto
+  // Se obtienen los datos del usuario y el estado de carga del contexto
   const { user, isLoading } = useAuth();
 
-  // ✅ Se obtiene el ícono del nivel actual del usuario
+  // Se busca el nivel y luego se obtiene el componente del ícono
   const userLevel = user?.gamification?.level || 1;
-  const LevelIcon: ElementType = 
-    gamificationLevels.find(l => l.level === userLevel)?.icon || Award;
+  const levelInfo = gamificationLevels.find(l => l.level === userLevel);
+  const IconComponent = levelInfo ? (LucideIcons as any)[levelInfo.icon] as ElementType : Award;
 
   if (isLoading) {
     return (
@@ -134,7 +135,6 @@ export default function DashboardPage() {
             <Leaf className="h-5 w-5 text-primary" />
           </CardHeader>
           <CardContent>
-            {/* ✅ Se muestran las monedas verdes reales del usuario */}
             <div className="text-4xl font-bold text-primary">{user?.greenCoins || 0} MV</div>
             <p className="text-xs text-muted-foreground">+0 MV desde ayer</p>
           </CardContent>
@@ -154,11 +154,9 @@ export default function DashboardPage() {
         <Card className="lg:col-span-1">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Mi Nivel</CardTitle>
-            {/* ✅ Se muestra el ícono del nivel del usuario */}
-            <LevelIcon className="h-5 w-5 text-accent" />
+            <IconComponent className="h-5 w-5 text-accent" />
           </CardHeader>
           <CardContent>
-            {/* ✅ Se muestran el título y el nivel reales del usuario */}
             <div className="text-2xl font-bold">{user?.gamification?.title || 'Principiante'}</div>
             <p className="text-xs text-muted-foreground">Nivel {user?.gamification?.level || 1}</p>
           </CardContent>

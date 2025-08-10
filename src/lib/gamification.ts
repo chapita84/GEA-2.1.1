@@ -1,14 +1,14 @@
 // src/lib/gamification.ts
+import { ElementType } from 'react';
 
 export interface GamificationLevel {
   level: number;
   title: string;
   minPoints: number;
   icon: string; // ✅ El ícono ahora es un string (el nombre del ícono)
-  color: string; // ✅ Se añade la propiedad del color
+  color: string;
 }
 
-// ✅ La lista de niveles ahora usa los nombres de los íconos como strings
 export const gamificationLevels: GamificationLevel[] = [
   { level: 1, title: 'Explorador Ecológico', minPoints: 0, icon: 'Sprout', color: 'text-green-500' },
   { level: 2, title: 'Guardián Verde', minPoints: 500, icon: 'Shield', color: 'text-blue-500' },

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Marker, useJsApiLoader } from '@react-google-maps/api';
+import { Marker } from '@react-google-maps/api';
 import {
   GoogleMap,
   MarkerF,
@@ -32,9 +32,7 @@ const center = {
 
 export default function MapPage() {
   const [comercios, setComercios] = useState<ComercioVerde[]>([]);
-  const { isLoaded } = useJsApiLoader({
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
-  });
+  // Removed useJsApiLoader since LoadScript is handled in layout.tsx
   const [selectedComercio, setSelectedComercio] = useState<ComercioVerde | null>(null);
 
   useEffect(() => {
@@ -70,18 +68,17 @@ export default function MapPage() {
       </header>
       <Card className="flex-1 overflow-hidden">
         <CardContent className="p-0 h-full">
-          {isLoaded ? (
-            <GoogleMap
-              mapContainerStyle={containerStyle}
-              center={center}
-              zoom={13}
-            >
+          <GoogleMap
+            mapContainerStyle={containerStyle}
+            center={center}
+            zoom={13}
+          >
               {comercios.length === 0 && (
                 <Marker
                   position={center}
                   icon={{
                     url: '/logoBig.png',
-                    scaledSize: new window.google.maps.Size(45, 45),
+                    scaledSize: new window.google.maps.Size(35, 35),
                   }}
                   title="Ejemplo GEA"
                 />
@@ -98,7 +95,7 @@ export default function MapPage() {
                     }}
                     icon={{
                       url: '/logoBig.png',
-                      scaledSize: new window.google.maps.Size(45, 45),
+                      scaledSize: new window.google.maps.Size(35, 35),
                     }}
                     title={comercio.nombre}
                   />
@@ -110,11 +107,6 @@ export default function MapPage() {
                 )
               )}
             </GoogleMap>
-          ) : (
-            <div className="flex items-center justify-center h-full">
-              Cargando mapa...
-            </div>
-          )}
         </CardContent>
       </Card>
     </div>

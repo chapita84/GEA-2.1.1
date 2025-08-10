@@ -25,6 +25,10 @@ import {
 import { gamificationLevels } from '@/lib/gamification';
 import * as LucideIcons from 'lucide-react';
 import { cn } from '@/lib/utils';
+// ✅ Se importan las funciones de Firebase Auth
+import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
+import { app } from '@/lib/firebase-client';
+
 
 type ClientWithUserData = Client & Partial<User>;
 
@@ -38,6 +42,7 @@ export default function ClientsManagementPage() {
   const [selectedClient, setSelectedClient] = useState<ClientWithUserData | null>(null);
   const [formData, setFormData] = useState<Partial<ClientWithUserData & { password?: string, confirmPassword?: string }>>({});
   const { toast } = useToast();
+  const auth = getAuth(app);
 
   const loadData = useCallback(async () => {
     try {
@@ -80,7 +85,8 @@ export default function ClientsManagementPage() {
 
   const handleSave = useCallback(async () => {
     try {
-      if (!selectedClient) { // Lógica para CREAR
+      // --- Lógica para CREAR un nuevo Cliente y Usuario ---
+      if (!selectedClient) {
         if (!formData.email || !formData.nombre || !formData.password || !formData.confirmPassword) {
           toast({ title: "Campos Incompletos", description: "Email, Nombre, y Contraseña son obligatorios.", variant: "destructive" });
           return;
@@ -94,20 +100,19 @@ export default function ClientsManagementPage() {
           return;
         }
 
-        const newUid = formData.email.replace(/[@.]/g, '');
+        // 1. Crear el usuario en Firebase Authentication
+        const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
+        const firebaseUser = userCredential.user;
 
-        const userData: User = {
-          uid: newUid,
-          email: formData.email,
-          displayName: `${formData.nombre} ${formData.apellido || ''}`.trim(),
-          password: formData.password,
-          createdAt: new Date().toISOString(),
-          gamification: { level: 1, points: 0, title: 'Explorador Ecológico' }
-        };
+        // 2. Crear el documento del usuario en la colección 'users'
+        await createUser(firebaseUser, { 
+          displayName: `${formData.nombre} ${formData.apellido || ''}`.trim() 
+        });
 
+        // 3. Crear el perfil del cliente en la colección 'clients'
         const clientData: Client = {
-          id: newUid,
-          usuarioUid: newUid,
+          id: firebaseUser.uid,
+          usuarioUid: firebaseUser.uid,
           nombre: formData.nombre,
           apellido: formData.apellido || '',
           telefono: formData.telefono || '',
@@ -115,11 +120,10 @@ export default function ClientsManagementPage() {
           fechaNacimiento: formData.fechaNacimiento || '',
           documento: formData.documento || '',
         };
-
-        await createUser(userData);
         await createClient(clientData);
         toast({ title: "Cliente y Usuario Creados" });
-      } else { // Lógica para ACTUALIZAR
+
+      } else { // --- Lógica para ACTUALIZAR un Cliente existente ---
         if (!formData.nombre || !formData.apellido) {
           toast({ title: "Campos Incompletos", description: "Nombre y apellido son obligatorios.", variant: "destructive" });
           return;
@@ -139,16 +143,21 @@ export default function ClientsManagementPage() {
       setIsModalOpen(false);
       setSearchTerm('');
       loadData();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving client:', error);
-      toast({ title: "Error al Guardar", variant: "destructive" });
+      if (error.code === 'auth/email-already-in-use') {
+        toast({ title: "Error", description: "Este correo electrónico ya está en uso.", variant: "destructive" });
+      } else {
+        toast({ title: "Error al Guardar", variant: "destructive" });
+      }
     }
-  }, [formData, selectedClient, loadData, toast]);
+  }, [formData, selectedClient, loadData, toast, auth]);
 
   const handleDelete = useCallback(async () => {
     if (!clientToDelete) return;
     try {
       await deleteClient(clientToDelete.id);
+      // Opcional: También podrías querer eliminar el usuario asociado desde una Cloud Function
       toast({
         title: "Cliente Eliminado",
         description: `El cliente ${clientToDelete.nombre} ha sido eliminado.`,

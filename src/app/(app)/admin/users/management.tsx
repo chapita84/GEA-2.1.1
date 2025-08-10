@@ -7,11 +7,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { KeyRound, Pencil, Trash2, Plus, Users, Search, Loader2 } from 'lucide-react';
-import { getAllUsers, updateUser, deleteUser, createUser, uploadProfileImage, updateUserPassword } from '@/lib/users-crud-complete';
-import { getClientByUserUid, createClient, updateClient, deleteClient } from '@/lib/client-crud';
+import { KeyRound, Pencil, Plus, Users, Search, Loader2 } from 'lucide-react';
+import { getAllUsers, updateUser, createUser, uploadProfileImage, updateUserPassword } from '@/lib/users-crud-complete';
+import { getClientByUserUid, createClient, updateClient } from '@/lib/client-crud';
 import { useToast } from '@/hooks/use-toast';
 import { User } from '@/models/user_model';
 import { Client } from '@/models/client_model';
@@ -23,6 +22,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/functions';
+import { firebaseConfig } from '@/lib/firebase-client';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+
+// Use modern Firebase SDK instead of compat
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+const functions = getFunctions(app, 'southamerica-west1');
+
+// Keep compat for backwards compatibility if needed
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
 
 type UserWithClientData = User & Partial<Client>;
 
@@ -33,29 +46,12 @@ export default function UsersManagementPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
-  const [userToDelete, setUserToDelete] = useState<UserWithClientData | null>(null);
   const [selectedUser, setSelectedUser] = useState<UserWithClientData | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [formData, setFormData] = useState<Partial<UserWithClientData & { password?: string, confirmPassword?: string }>>({
-    uid: '',
-    email: '',
-    displayName: '',
-    photoUrl: '',
-    password: '',
-    confirmPassword: '',
-    onboardingCompleted: false,
-    greenCoins: 0,
-    isAdmin: false,
-    nombre: '',
-    apellido: '',
-    telefono: '',
-    direccion: '',
-    fechaNacimiento: '',
-    documento: '',
-  });
+  const [formData, setFormData] = useState<Partial<UserWithClientData & { password?: string, confirmPassword?: string }>>({});
   const { toast } = useToast();
 
   const loadUsers = useCallback(async () => {
@@ -91,13 +87,30 @@ export default function UsersManagementPage() {
     }
   };
 
+  const handleToggleStatus = async (userToToggle: UserWithClientData) => {
+    const newStatus = (userToToggle.status === 'active' || userToToggle.status === undefined) ? 'inactive' : 'active';
+    try {
+      const toggleFunction = firebase.app().functions("southamerica-west1").httpsCallable('toggleUserStatus');
+      await toggleFunction({ userId: userToToggle.uid, newStatus });
+      
+      toast({
+        title: "Estado Actualizado",
+        description: `El usuario ${userToToggle.displayName} ha sido ${newStatus === 'active' ? 'activado' : 'desactivado'}.`
+      });
+      loadUsers();
+    } catch (error) {
+      console.error("Error al cambiar el estado del usuario:", error);
+      toast({ title: "Error", description: "No se pudo cambiar el estado del usuario.", variant: "destructive" });
+    }
+  };
+
   const handleCreateUser = useCallback(async () => {
     try {
-      if (!formData.uid || !formData.email || !formData.displayName) {
-        toast({ title: "Campos Incompletos", description: "ID, Email y Nombre son obligatorios.", variant: "destructive" });
+      if (!formData.email || !formData.displayName || !formData.password) {
+        toast({ title: "Campos Incompletos", description: "Email, Nombre y Contraseña son obligatorios.", variant: "destructive" });
         return;
       }
-      if (!formData.password || formData.password.length < 6) {
+      if (formData.password.length < 6) {
         toast({ title: "Contraseña inválida", description: "La contraseña debe tener al menos 6 caracteres.", variant: "destructive" });
         return;
       }
@@ -107,30 +120,32 @@ export default function UsersManagementPage() {
       }
 
       setIsUploading(true);
-
-      let photoUrl = formData.photoUrl || 'https://via.placeholder.com/150';
       
-      if (selectedFile && formData.uid) {
-        photoUrl = await uploadProfileImage({ userId: formData.uid, file: selectedFile });
+      let photoUrl = 'https://via.placeholder.com/150';
+      
+      // Validar URL de foto si se proporcionó
+      if (formData.photoUrl && formData.photoUrl.trim() !== '') {
+        const trimmedUrl = formData.photoUrl.trim();
+        if (trimmedUrl.startsWith('http://') || trimmedUrl.startsWith('https://')) {
+          photoUrl = trimmedUrl;
+        }
+      }
+      
+      // Subir imagen si se seleccionó una
+      if (selectedFile) {
+        photoUrl = await uploadProfileImage({ userId: 'temp', file: selectedFile });
       }
 
-      const userData: User = {
-        uid: formData.uid,
-        email: formData.email!,
+      // Preparar datos para la Cloud Function
+      const userData = {
+        email: formData.email,
+        password: formData.password,
         displayName: formData.displayName,
         photoUrl: photoUrl,
-        password: formData.password,
-        createdAt: new Date().toISOString(),
-        interests: [],
-        onboardingCompleted: formData.onboardingCompleted || false,
-        greenCoins: formData.greenCoins || 0,
-        isAdmin: formData.isAdmin || false,
-        gamification: { level: 1, points: 0, title: 'Explorador Ecológico' }
+        isAdmin: formData.isAdmin,
       };
 
-      const clientData: Client = {
-        id: formData.uid,
-        usuarioUid: formData.uid,
+      const clientData = {
         nombre: formData.nombre || formData.displayName,
         apellido: formData.apellido || '',
         telefono: formData.telefono || '',
@@ -139,22 +154,44 @@ export default function UsersManagementPage() {
         documento: formData.documento || '',
       };
 
-      await createUser(userData);
-      await createClient(clientData);
+      // Usar Cloud Function para crear usuario sin afectar la sesión actual
+      console.log('Calling createUserByAdmin with:', { userData, clientData });
+      const createUserFunction = httpsCallable(functions, 'createUserByAdmin');
+      const result = await createUserFunction({ userData, clientData });
+      console.log('createUserByAdmin result:', result);
 
-      setIsCreateModalOpen(false);
-      resetForm();
-      setSearchTerm('');
-      loadUsers();
-      toast({
-        title: "Usuario Creado",
-        description: `El usuario ${formData.displayName} y su perfil de cliente han sido creados.`,
-      });
-    } catch (error) {
+      const data = result.data as { success: boolean; uid?: string };
+      if (data.success) {
+        setIsCreateModalOpen(false);
+        resetForm();
+        setSearchTerm('');
+        loadUsers();
+        toast({
+          title: "Usuario Creado",
+          description: `El usuario ${formData.displayName} y su perfil de cliente han sido creados.`,
+        });
+      }
+    } catch (error: any) {
       console.error('Error creating user/cliente:', error);
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        stack: error.stack
+      });
+      let errorMessage = "Ocurrió un error al intentar crear el usuario y el cliente.";
+      
+      if (error.message?.includes('email-already-in-use') || error.code === 'auth/email-already-in-use') {
+        errorMessage = "Este correo electrónico ya está en uso.";
+      } else if (error.message?.includes('invalid-email')) {
+        errorMessage = "El formato del correo electrónico no es válido.";
+      } else if (error.message?.includes('weak-password')) {
+        errorMessage = "La contraseña es muy débil.";
+      }
+      
       toast({
         title: "Error al Crear",
-        description: "Ocurrió un error al intentar crear el usuario y el cliente.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -182,12 +219,10 @@ export default function UsersManagementPage() {
         photoUrl = await uploadProfileImage({ userId: selectedUser.uid, file: selectedFile });
       }
 
-      // ✅ CORRECCIÓN: Se asegura que los valores 'null' se conviertan a 'undefined'
-      // para que coincidan con el tipo 'User' de la base de datos.
       const userDataToUpdate: Partial<User> = {
         email: formData.email,
-        displayName: formData.displayName ?? undefined,
-        photoUrl: photoUrl ?? undefined,
+        displayName: formData.displayName,
+        photoUrl: photoUrl,
         greenCoins: formData.greenCoins,
         isAdmin: formData.isAdmin,
         onboardingCompleted: formData.onboardingCompleted,
@@ -242,28 +277,6 @@ export default function UsersManagementPage() {
       setSelectedFile(null);
     }
   }, [formData, selectedFile, selectedUser, loadUsers, toast]);
-
-  const handleDeleteUser = useCallback(async () => {
-    try {
-      if (!userToDelete) return;
-      await deleteUser(userToDelete.uid);
-      await deleteClient(userToDelete.uid);
-      toast({
-        title: "Usuario Eliminado",
-        description: `El usuario ${userToDelete.displayName} ha sido eliminado.`,
-      });
-      setUserToDelete(null);
-      setSearchTerm('');
-      loadUsers();
-    } catch (error) {
-      console.error('Error deleting user:', error);
-      toast({
-        title: "Error al Eliminar",
-        description: "Ocurrió un error al intentar eliminar el usuario.",
-        variant: "destructive",
-      });
-    }
-  }, [userToDelete, loadUsers, toast]);
 
   const handlePasswordChange = useCallback(async () => {
     if (!selectedUser) return;
@@ -383,8 +396,7 @@ export default function UsersManagementPage() {
                 <TableRow>
                   <TableHead>Usuario</TableHead>
                   <TableHead>Email</TableHead>
-                  <TableHead>Rol</TableHead>
-                  <TableHead>GreenCoins</TableHead>
+                  <TableHead>Estado</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -403,19 +415,22 @@ export default function UsersManagementPage() {
                     </TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell>
-                      {user.isAdmin && <Badge variant="destructive">Admin</Badge>}
+                      <Badge variant={(user.status === 'active' || user.status === undefined) ? 'default' : 'destructive'}>
+                        {(user.status === 'active' || user.status === undefined) ? 'Activo' : 'Inactivo'}
+                      </Badge>
                     </TableCell>
-                    <TableCell>{user.greenCoins || 0}</TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex justify-end items-center gap-4">
+                        <Switch
+                          checked={(user.status === 'active' || user.status === undefined)}
+                          onCheckedChange={() => handleToggleStatus(user)}
+                          aria-label="Activar/desactivar usuario"
+                        />
                         <Button variant="outline" size="icon" onClick={() => openPasswordModal(user)}>
                           <KeyRound className="h-4 w-4" />
                         </Button>
                         <Button variant="outline" size="icon" onClick={() => openEditModal(user)}>
                           <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button variant="destructive" size="icon" onClick={() => setUserToDelete(user)}>
-                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>
@@ -437,10 +452,6 @@ export default function UsersManagementPage() {
           </DialogHeader>
           <div className="space-y-4 max-h-[60vh] overflow-y-auto p-4">
             <h3 className="text-lg font-semibold border-b pb-2">Datos de Acceso</h3>
-            <div>
-              <Label htmlFor="uid">ID de Usuario (UID) *</Label>
-              <Input id="uid" value={formData.uid} onChange={(e) => setFormData({ ...formData, uid: e.target.value })}/>
-            </div>
             <div>
               <Label htmlFor="email">Email *</Label>
               <Input id="email" type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })}/>
@@ -617,24 +628,6 @@ export default function UsersManagementPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <AlertDialog open={!!userToDelete} onOpenChange={() => setUserToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta acción no se puede deshacer. Se eliminará permanentemente al usuario
-              <span className="font-bold"> {userToDelete?.displayName}</span> y su perfil de cliente.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteUser}>
-              Eliminar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   ); 
 }

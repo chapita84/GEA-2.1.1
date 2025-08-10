@@ -6,7 +6,7 @@ export interface Record {
   monto: number;
   descripcion: string;
   usuario: string;
-  categoria: string;
+  rubro: string; // Cambiado de categoria a rubro
   status?: 'pendiente' | 'approved' | 'rejected';
   greenCoins?: number;
   cuit?: string; // ✅ AÑADE ESTA LÍNEA

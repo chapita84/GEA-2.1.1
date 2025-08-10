@@ -21,6 +21,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Card,
   CardContent,
@@ -41,6 +42,7 @@ import { AlertTriangle, CheckCircle } from 'lucide-react';
 import { validarCuit } from '@/lib/cuit-validator';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import { RUBROS_COMERCIOS } from '@/data/rubros';
 
 export default function AdminComerciosVerdes() {
   const [comercios, setComercios] = useState<ComercioVerdeConId[]>([]);
@@ -160,7 +162,7 @@ export default function AdminComerciosVerdes() {
         description: currentComercio.description || '',
         imageUrl: currentComercio.imageUrl || '',
         tags: currentComercio.tags || [],
-        category: currentComercio.category || '',
+        rubro: currentComercio.rubro || '', // Cambiado de category a rubro
         cuit: currentComercio.cuit || '',
         isSustainable: currentComercio.isSustainable || false,
       };
@@ -219,7 +221,7 @@ export default function AdminComerciosVerdes() {
             <TableHeader>
               <TableRow>
                 <TableHead>Nombre</TableHead>
-                <TableHead>Categoría</TableHead>
+                <TableHead>Rubro</TableHead>
                 <TableHead>CUIT</TableHead>
                 <TableHead>Sostenible</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
@@ -229,7 +231,7 @@ export default function AdminComerciosVerdes() {
               {comercios.map(comercio => (
                 <TableRow key={comercio.id}>
                   <TableCell className="font-medium">{comercio.name}</TableCell>
-                  <TableCell>{comercio.category}</TableCell>
+                  <TableCell>{comercio.rubro}</TableCell> {/* Cambiado de category a rubro */}
                   <TableCell>{comercio.cuit || '-'}</TableCell>
                   <TableCell>
                     {comercio.isSustainable && (
@@ -282,20 +284,29 @@ export default function AdminComerciosVerdes() {
                 />
               </div>
               <div>
-                <Label htmlFor="category">Categoría</Label>
-                <Input
-                  id="category"
-                  value={currentComercio?.category || ''}
-                  onChange={e =>
+                <Label htmlFor="rubro">Rubro</Label>
+                <Select 
+                  value={currentComercio?.rubro || ''} 
+                  onValueChange={(value) =>
                     setCurrentComercio(
                       (prev: Partial<ComercioVerdeConId> | null) => ({
                         ...prev,
-                        category: e.target.value,
+                        rubro: value,
                       })
                     )
                   }
-                  required
-                />
+                >
+                  <SelectTrigger id="rubro">
+                    <SelectValue placeholder="Selecciona un rubro" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {RUBROS_COMERCIOS.map((rubro) => (
+                      <SelectItem key={rubro} value={rubro}>
+                        {rubro}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label htmlFor="address">Dirección</Label>

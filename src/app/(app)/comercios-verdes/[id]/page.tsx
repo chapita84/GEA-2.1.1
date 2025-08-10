@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, MapPin, Phone } from 'lucide-react';
 import Image from 'next/image';
-import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
+import { GoogleMap, Marker } from '@react-google-maps/api';
 
 const mapContainerStyle = {
   height: '315px',
@@ -22,9 +22,7 @@ export default function ComercioDetallePage() {
   const router = useRouter();
   const [comercio, setComercio] = useState<ComercioVerdeConId | null>(null);
 
-  const { isLoaded } = useJsApiLoader({
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
-  });
+  // Removed useJsApiLoader since LoadScript is handled in layout.tsx
 
   useEffect(() => {
     if (typeof id === 'string') {
@@ -57,7 +55,7 @@ export default function ComercioDetallePage() {
         <CardHeader>
           <div className="flex flex-col gap-2">
             <CardTitle>{comercio.name}</CardTitle>
-            <Badge variant="secondary">{comercio.category}</Badge>
+            <Badge variant="secondary">{comercio.rubro}</Badge> {/* Cambiado de category a rubro */}
             <div className="flex flex-wrap gap-2 mt-2">
               {comercio.tags && comercio.tags.map((tag, i) => (
                 <Badge key={i} variant="outline">{tag}</Badge>
@@ -82,7 +80,7 @@ export default function ComercioDetallePage() {
             <span>{comercio.phone}</span>
           </div>
           <p className="mb-4">{comercio.description}</p>
-          {isLoaded && center ? (
+          {center ? (
             <div className="mt-4">
               <GoogleMap
                 mapContainerStyle={mapContainerStyle}

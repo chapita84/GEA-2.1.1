@@ -20,6 +20,7 @@ import { User } from '@/models/user_model';
 import { ComercioVerde } from '@/models/comercio_verde_model';
 import { Client } from '@/models/client_model';
 import { calculateGreenCoins } from '@/lib/green-coins-calculator';
+import { TODOS_LOS_RUBROS } from '@/data/rubros';
 import {
   Table,
   TableBody,
@@ -47,7 +48,7 @@ export default function TransactionsManagementPage() {
     descripcion: '',
     usuario: '',
     clienteUid: '',
-    categoria: '',
+    rubro: '', // Cambiado de categoria a rubro
     status: 'pendiente',
     greenCoins: 0,
     cuit: '',
@@ -92,7 +93,8 @@ export default function TransactionsManagementPage() {
     return user ? user.displayName : userId;
   }, [users]);
 
-  const getComercioNameByCuit = useCallback((cuit: string) => {
+  const getComercioNameByCuit = useCallback((cuit?: string) => {
+    if (!cuit) return 'N/A';
     const comercio = comercios.find(c => c.cuit === cuit);
     return comercio ? comercio.name : 'N/A';
   }, [comercios]);
@@ -104,12 +106,11 @@ export default function TransactionsManagementPage() {
 
   const filteredRecords = records.filter(record =>
     record.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    getUserNameById(record.usuario!)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     getClientNameById(record.clienteUid!)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    record.categoria?.toLowerCase().includes(searchTerm.toLowerCase())
+    getComercioNameByCuit(record.cuit).toLowerCase().includes(searchTerm.toLowerCase()) ||
+    record.rubro?.toLowerCase().includes(searchTerm.toLowerCase()) // Cambiado de categoria a rubro
   );
 
-  // ✅ CORRECCIÓN: Se actualiza el handler para que funcione con el ID del comercio
   const handleComercioChange = (comercioId: string) => {
     const selected = comercios.find(c => c.id === comercioId);
     setFormData(prev => ({
@@ -121,7 +122,7 @@ export default function TransactionsManagementPage() {
 
   const handleSaveRecord = useCallback(async (isUpdate: boolean) => {
     try {
-      if (!formData.descripcion || !formData.usuario || !formData.fecha || !formData.categoria) {
+      if (!formData.descripcion || !formData.usuario || !formData.fecha || !formData.rubro) {
         toast({ title: "Campos Incompletos", variant: "destructive" });
         return;
       }
@@ -132,7 +133,7 @@ export default function TransactionsManagementPage() {
         descripcion: formData.descripcion,
         usuario: formData.usuario,
         clienteUid: formData.clienteUid || '',
-        categoria: formData.categoria,
+        rubro: formData.rubro, // Cambiado de categoria a rubro
         greenCoins: formData.greenCoins || 0,
         status: formData.status || 'pendiente',
         cuit: formData.cuit || '',
@@ -196,7 +197,7 @@ export default function TransactionsManagementPage() {
       descripcion: record.descripcion,
       usuario: record.usuario,
       clienteUid: record.clienteUid || '',
-      categoria: record.categoria,
+      rubro: record.rubro, // Cambiado de categoria a rubro
       status: record.status || 'pendiente',
       greenCoins: record.greenCoins || 0,
       cuit: record.cuit || '',
@@ -212,7 +213,7 @@ export default function TransactionsManagementPage() {
       descripcion: '',
       usuario: '',
       clienteUid: '',
-      categoria: '',
+      rubro: '', // Cambiado de categoria a rubro
       status: 'pendiente',
       greenCoins: 0,
       cuit: '',
@@ -221,12 +222,11 @@ export default function TransactionsManagementPage() {
   };
 
   const getBadgeVariant = (status?: string) => {
-    if (status === 'approved') return 'outline';
+    if (status === 'approved') return 'default';
     if (status === 'rejected') return 'destructive';
     return 'secondary';
   };
   
-  // ✅ CORRECCIÓN: Se calcula el ID del comercio seleccionado para el valor del dropdown
   const selectedComercioId = comercios.find(c => c.cuit === formData.cuit)?.id || '';
 
   return (
@@ -252,7 +252,7 @@ export default function TransactionsManagementPage() {
         </CardHeader>
         <CardContent>
           <Input
-            placeholder="Buscar por descripción, usuario, cliente o categoría..."
+            placeholder="Buscar por descripción, cliente, comercio o rubro..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -276,7 +276,8 @@ export default function TransactionsManagementPage() {
                   <TableHead>Descripción</TableHead>
                   <TableHead>Cliente</TableHead>
                   <TableHead>Comercio</TableHead>
-                  <TableHead>Sostenible</TableHead>
+                  <TableHead>Importe</TableHead>
+                  <TableHead>Monedas Verdes</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
@@ -286,11 +287,13 @@ export default function TransactionsManagementPage() {
                   <TableRow key={record.id}>
                     <TableCell className="font-medium">{record.descripcion}</TableCell>
                     <TableCell>{getClientNameById(record.clienteUid!)}</TableCell>
-                    <TableCell>{getComercioNameByCuit(record.cuit!)}</TableCell>
+                    <TableCell>{getComercioNameByCuit(record.cuit)}</TableCell>
+                    <TableCell>${record.monto?.toLocaleString('es-AR')}</TableCell>
                     <TableCell>
-                      {record.isSustainable && (
-                        <Leaf className="h-5 w-5 text-green-600" />
-                      )}
+                      <div className="flex items-center gap-1 text-green-600">
+                        <Leaf className="h-4 w-4" />
+                        <span>{record.greenCoins || 0}</span>
+                      </div>
                     </TableCell>
                     <TableCell>
                       <Badge variant={getBadgeVariant(record.status)}>{record.status || 'pendiente'}</Badge>
@@ -360,7 +363,6 @@ export default function TransactionsManagementPage() {
             </div>
             <div>
               <Label htmlFor="cuit">Comercio</Label>
-              {/* ✅ CORRECCIÓN: Se usa el ID del comercio para la selección */}
               <Select value={selectedComercioId} onValueChange={handleComercioChange}>
                 <SelectTrigger id="cuit"><SelectValue placeholder="Selecciona un comercio" /></SelectTrigger>
                 <SelectContent>
@@ -385,8 +387,19 @@ export default function TransactionsManagementPage() {
               <Input id="fecha" type="date" value={formData.fecha} onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}/>
             </div>
             <div>
-              <Label htmlFor="categoria">Categoría *</Label>
-              <Input id="categoria" value={formData.categoria} onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}/>
+              <Label htmlFor="rubro">Rubro *</Label>
+              <Select value={formData.rubro} onValueChange={(value) => setFormData({ ...formData, rubro: value })}>
+                <SelectTrigger id="rubro">
+                  <SelectValue placeholder="Selecciona un rubro" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TODOS_LOS_RUBROS.map((rubro) => (
+                    <SelectItem key={rubro} value={rubro}>
+                      {rubro}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label htmlFor="status">Estado</Label>

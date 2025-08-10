@@ -115,7 +115,7 @@ export async function getAllComerciosMap(): Promise<ComercioVerdeConIdMap[]> {
       address: data.address || '',
       phone: data.phone || '',
       description: data.description || '',
-      category: data.category || '',
+      rubro: data.rubro || data.category || '', // Cambiado de category a rubro, con fallback para compatibilidad
       image: data.image || '',
       ubicacion, // puede ser null si no hay location
       imageUrl: data.imageUrl || data.image || '', // Ajusta según tu modelo

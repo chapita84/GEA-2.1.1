@@ -1,33 +1,20 @@
 'use client';
 
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore'; // ✅ Se importa onSnapshot
-import { db } from '@/lib/firebase-client'; // ✅ Se importa la instancia de db
+import { getAuth, onAuthStateChanged, signOut, User as FirebaseAuthUser } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db, app } from '@/lib/firebase-client';
+import { User } from '@/models/user_model';
+import { Client } from '@/models/client_model';
 
-export type CustomUser = {
-  uid: string;
-  displayName: string | null;
-  photoUrl?: string | null;
-  email?: string;
-  isAdmin?: boolean;
-  createdAt?: any;
-  greenCoins?: number;
-  gamification?: any;
-  nombre?: string;
-  apellido?: string;
-  telefono?: string;
-  direccion?: string;
-  fechaNacimiento?: string;
-  documento?: string;
-  password?: string;
-};
+// Se crea un tipo unificado que combina User y Client
+export type CustomUser = User & Partial<Client>;
 
 type AuthContextType = {
   user: CustomUser | null;
   isLoading: boolean;
-  login: (userData: CustomUser) => void;
   logout: () => void;
-  updateUser: (updatedData: Partial<CustomUser>) => void;
+  updateUser: (updatedData: Partial<CustomUser>) => void; // Se re-añade para actualizaciones locales
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -35,66 +22,84 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<CustomUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const auth = getAuth(app);
 
-  // Efecto para cargar el usuario inicial desde localStorage
   useEffect(() => {
-    try {
-      const storedUser = localStorage.getItem('gea-user');
-      if (storedUser) {
-        setUser(JSON.parse(storedUser));
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseAuthUser | null) => {
+      console.log('AuthStateChanged - Firebase User:', firebaseUser?.uid, firebaseUser?.email);
+      
+      if (firebaseUser) {
+        const userDocRef = doc(db, 'users', firebaseUser.uid);
+        const clientDocRef = doc(db, 'clients', firebaseUser.uid);
+
+        try {
+          const [userDocSnap, clientDocSnap] = await Promise.all([
+            getDoc(userDocRef),
+            getDoc(clientDocRef),
+          ]);
+
+          console.log('User doc exists:', userDocSnap.exists());
+          console.log('Client doc exists:', clientDocSnap.exists());
+
+          if (userDocSnap.exists()) {
+            const userData = userDocSnap.data() as User;
+            const clientData = clientDocSnap.exists() ? clientDocSnap.data() as Client : {};
+            
+            const combinedUser = {
+              ...userData,
+              ...clientData,
+              uid: firebaseUser.uid,
+              email: firebaseUser.email || userData.email,
+            };
+            
+            console.log('Setting user data:', combinedUser);
+            setUser(combinedUser);
+          } else {
+            console.error(`No se encontró el documento de usuario para el UID: ${firebaseUser.uid}`);
+            console.log('Attempting to create user document...');
+            
+            // Intentar crear el documento de usuario si no existe
+            const newUserData: User = {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email!,
+              displayName: firebaseUser.displayName || firebaseUser.email || undefined,
+              photoUrl: firebaseUser.photoURL || 'https://via.placeholder.com/150',
+              createdAt: new Date().toISOString(),
+              isAdmin: false,
+              greenCoins: 0,
+              gamification: { level: 1, points: 0, title: 'Explorador Ecológico' },
+            };
+            
+            await setDoc(userDocRef, newUserData);
+            console.log('User document created successfully');
+            setUser(newUserData);
+          }
+        } catch (error) {
+          console.error('Error fetching user data:', error);
+          setUser(null);
+        }
+      } else {
+        setUser(null);
       }
-    } catch (error) {
-      console.error("Error al cargar el usuario desde localStorage", error);
-    } finally {
       setIsLoading(false);
-    }
-  }, []);
-
-  // ✅ NUEVO EFECTO: Se suscribe a los cambios del usuario en Firestore
-  useEffect(() => {
-    // Si no hay usuario o la carga inicial no ha terminado, no hacemos nada
-    if (!user?.uid || isLoading) return;
-
-    const userDocRef = doc(db, 'users', user.uid);
-
-    // onSnapshot crea un listener en tiempo real
-    const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const firestoreUser = { uid: docSnap.id, ...docSnap.data() } as CustomUser;
-        
-        // Se actualiza el estado y el localStorage con los nuevos datos
-        setUser(firestoreUser);
-        localStorage.setItem('gea-user', JSON.stringify(firestoreUser));
-        console.log("Datos del usuario actualizados en tiempo real:", firestoreUser);
-      }
-    }, (error) => {
-      console.error("Error en el listener de Firestore:", error);
     });
 
-    // Se limpia el listener cuando el componente se desmonta o el usuario cambia
     return () => unsubscribe();
-  }, [user?.uid, isLoading]); // Se activa cuando el ID del usuario cambia o la carga termina
-
-  const login = (userData: CustomUser) => {
-    localStorage.setItem('gea-user', JSON.stringify(userData));
-    setUser(userData);
-  };
-
-  const logout = () => {
-    localStorage.removeItem('gea-user');
-    setUser(null);
+  }, [auth]);
+  
+  const logout = async () => {
+    await signOut(auth);
   };
 
   const updateUser = (updatedData: Partial<CustomUser>) => {
     setUser(prevUser => {
       if (!prevUser) return null;
       const newUser = { ...prevUser, ...updatedData };
-      localStorage.setItem('gea-user', JSON.stringify(newUser));
       return newUser;
     });
   };
 
-  const value = { user, isLoading, login, logout, updateUser };
+  const value = { user, isLoading, logout, updateUser };
 
   return (
     <AuthContext.Provider value={value}>
